@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WiSense</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0a121a;
+  --panel: #0f1b26;
+  --line: #1c2d3d;
+  --grid: #162534;
+  --ink: #e8f0f6;
+  --ink2: #a3b6c6;
+  --muted: #667b8d;
+  --cyan: #19c3e6;
+  --magenta: #ff3d81;
+  --ok: #3dd6a3;
+  --warn: #ffb020;
+  --alert: #ff5c5c;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; }
+body { min-height: 100vh; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.brand { font-family: var(--serif); font-size: 28px; letter-spacing: 0.01em; margin: 0 8px 0 0; font-weight: 600; }
+.brand small { font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
+.chip { display: inline-flex; align-items: center; gap: 8px; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.chip.live i { background: var(--ok); }
+.chip.stale i { background: var(--alert); }
+.spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { background: transparent; border: 0; padding: 7px 12px; color: var(--ink2); cursor: pointer; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: #17293a; color: var(--ink); }
+.btn { background: var(--ink); color: #0a121a; border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
+.btn:disabled { background: #2a3b4a; color: var(--ink2); cursor: default; }
+
+#banner { display: none; padding: 12px 20px; font-size: 15px; border-bottom: 1px solid var(--line); }
+#banner.show { display: block; }
+#banner.cal { background: #2b2210; color: var(--warn); }
+#banner.fall { background: #3a1214; color: #ffd9d9; font-size: 17px; }
+#banner.fall b { color: #fff; }
+#banner .bar { height: 3px; background: #4a3a14; margin-top: 8px; border-radius: 2px; overflow: hidden; }
+#banner .bar span { display: block; height: 100%; background: var(--warn); width: 0; }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; }
+.left { padding: 16px 20px 24px; min-width: 0; }
+.right { border-left: 1px solid var(--line); padding: 0 20px 24px; min-width: 0; }
+@media (max-width: 1000px) { main { grid-template-columns: 1fr; } .right { border-left: 0; border-top: 1px solid var(--line); } }
+
+h2 { font-size: 13px; font-weight: 600; color: var(--ink2); margin: 18px 0 6px; display: flex; align-items: center; gap: 12px; }
+h2:first-child { margin-top: 0; }
+h2 .note { font-weight: 400; color: var(--muted); }
+h2 .grow { flex: 1; }
+h2 label { font-weight: 400; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }
+input[type=range] { accent-color: var(--cyan); width: 110px; }
+canvas { display: block; width: 100%; background: var(--panel); border-radius: 4px; }
+#wave { height: 230px; }
+#wf { height: 300px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .pair { grid-template-columns: 1fr; } }
+#mov, #trace { height: 130px; }
+#spec { height: 190px; }
+
+.read { padding: 18px 0; border-bottom: 1px solid var(--line); }
+.read .k { color: var(--ink2); font-size: 13px; }
+.read .v { font-family: var(--serif); font-size: 38px; line-height: 1.15; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.read .v small { font-family: var(--sans); font-size: 14px; color: var(--ink2); margin-left: 6px; }
+.read .d { color: var(--muted); font-size: 13px; min-height: 18px; }
+.read.ok .v { color: var(--ok); }
+.read.warn .v { color: var(--warn); }
+.read.alert .v { color: var(--alert); }
+.meter { position: relative; height: 4px; background: var(--line); border-radius: 2px; margin: 10px 0 2px; }
+.meter span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--cyan); border-radius: 2px; width: 0; }
+.meter em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink2); }
+.pipe { color: var(--muted); font-size: 12.5px; line-height: 1.6; margin-top: 16px; }
+.pipe b { color: var(--ink2); font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">WiSense<small>camera-free sensing with Wi-Fi CSI</small></h1>
+  <span class="chip" id="chip"><i></i><span id="chipText">Connecting…</span></span>
+  <span class="spacer"></span>
+  <span class="seg" id="simSeg" hidden aria-label="Simulator scenario">
+    <button data-mode="empty" aria-pressed="true">Empty room</button>
+    <button data-mode="breathe" aria-pressed="false">Breathing</button>
+    <button data-mode="walk" aria-pressed="false">Walking</button>
+    <button data-mode="fall" aria-pressed="false">Fall</button>
+  </span>
+  <button class="btn" id="calBtn">Calibrate empty room</button>
+</header>
+
+<div id="banner" role="alert"></div>
+
+<main>
+  <section class="left">
+    <h2>Channel response across the 64 sub-carriers
+      <span class="grow"></span>
+      <span class="seg" id="waveSeg" aria-label="Wave view">
+        <button data-w="amp" aria-pressed="true">Amplitude</button>
+        <button data-w="dev" aria-pressed="false">Change</button>
+      </span>
+    </h2>
+    <canvas id="wave" aria-label="Live amplitude of each sub-carrier compared with the empty-room baseline"></canvas>
+
+    <h2>How the channel changed over the last 15 s
+      <span class="grow"></span>
+      <label>Sensitivity <input type="range" id="gain" min="0.4" max="4" step="0.1" value="1"></label>
+    </h2>
+    <canvas id="wf" aria-label="Waterfall of the filtered change in each sub-carrier over time"></canvas>
+
+    <div class="pair">
+      <div>
+        <h2>Movement <span class="note">× empty-room noise</span></h2>
+        <canvas id="mov" aria-label="Movement level over the last 30 seconds"></canvas>
+      </div>
+      <div>
+        <h2>Most responsive sub-carrier <span class="note" id="traceNote"></span></h2>
+        <canvas id="trace" aria-label="Filtered signal of the most responsive sub-carrier over the last 30 seconds"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <aside class="right" aria-live="polite">
+    <div class="read" id="rPres">
+      <div class="k">Presence</div>
+      <div class="v" id="presV">—</div>
+      <div class="d" id="presD"></div>
+      <div class="meter" id="meter"><span></span><em></em></div>
+    </div>
+    <div class="read" id="rBreath">
+      <div class="k">Breathing rate</div>
+      <div class="v" id="brV">—</div>
+      <div class="d" id="brD"></div>
+    </div>
+    <div class="read" id="rFall">
+      <div class="k">Fall</div>
+      <div class="v" id="fallV">No fall</div>
+      <div class="d" id="fallD">Watching for a movement burst followed by stillness</div>
+    </div>
+    <h2 style="margin-top:18px">Breathing spectrum <span class="note">20 s window</span></h2>
+    <canvas id="spec" aria-label="Frequency spectrum of the filtered signal with the breathing band highlighted"></canvas>
+    <p class="pipe"><b>Pipeline</b> amplitude per sub-carrier, averaged to 20 Hz, Hampel filter (7 samples, 3σ), band-pass 0.1–0.6 Hz, FFT over a 20 s sliding window. Breathing band 0.2–0.5 Hz, rate = 60 × peak frequency.</p>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const NSUB = 64, WF_ROWS = 300, TL = 600, PADL = 46, PADR = 12;
+const FONT = '11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+const C = { panel: '#0f1b26', grid: '#162534', ink: '#e8f0f6', ink2: '#a3b6c6', muted: '#667b8d',
+            cyan: '#19c3e6', magenta: '#ff3d81', warn: '#ffb020' };
+
+const st = {
+  source: null, label: '', valid: new Array(NSUB).fill(1), base: null, avg: null, amp: null,
+  trails: [], bpHist: [], lvlHist: [], status: null, lastFrame: 0, lastLog: '',
+  fullScale: 3, gain: 1, waveMode: 'amp', yLo: 0, yHi: 1, best: 0, traceMax: 1, movMax: 6, dirty: true,
+  cal: { state: 'none', progress: 0, seconds_left: 0 },
+};
+
+/* ---------- diverging colour map: cool = below baseline, warm = above, neutral at zero ---------- */
+const MID = [15, 27, 38], CY = [25, 195, 230], MG = [255, 61, 129];
+const LUT = new Uint8ClampedArray(512 * 3);
+for (let i = 0; i < 512; i++) {
+  const v = i / 255.5 - 1, t = Math.min(1, Math.abs(v)), e = Math.pow(t, 0.75);
+  const end = v < 0 ? CY : MG, hot = t > 0.85 ? (t - 0.85) / 0.15 * 0.45 : 0;
+  for (let c = 0; c < 3; c++) {
+    let x = MID[c] + (end[c] - MID[c]) * e;
+    LUT[i * 3 + c] = x + (255 - x) * hot;
+  }
+}
+const wfOff = document.createElement('canvas'); wfOff.width = NSUB; wfOff.height = WF_ROWS;
+const wfCtx = wfOff.getContext('2d');
+const wfImg = wfCtx.createImageData(NSUB, WF_ROWS);
+for (let i = 0; i < wfImg.data.length; i += 4) { wfImg.data[i] = MID[0]; wfImg.data[i+1] = MID[1]; wfImg.data[i+2] = MID[2]; wfImg.data[i+3] = 255; }
+
+function pushWaterfall(bp) {
+  const d = wfImg.data, rb = NSUB * 4, sc = st.gain / st.fullScale;
+  d.copyWithin(rb, 0, rb * (WF_ROWS - 1));
+  for (let i = 0; i < NSUB; i++) {
+    let r = MID[0], g = MID[1], b = MID[2];
+    if (st.valid[i]) {
+      const v = Math.max(-1, Math.min(1, bp[i] * sc)), k = Math.round((v + 1) * 255.5) * 3;
+      r = LUT[k]; g = LUT[k+1]; b = LUT[k+2];
+    }
+    d[i*4] = r; d[i*4+1] = g; d[i*4+2] = b; d[i*4+3] = 255;
+  }
+  wfCtx.putImageData(wfImg, 0, 0);
+}
+
+/* ---------- canvas helpers ---------- */
+function fit(c) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width), h = Math.round(r.height);
+  if (c.width !== w * dpr || c.height !== h * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+  x.clearRect(0, 0, w, h); x.font = FONT;
+  return { x, w, h };
+}
+const colX = (i, pw) => PADL + (i + 0.5) * pw / NSUB;
+function text(x, s, px, py, color, align, base) {
+  x.fillStyle = color || C.muted; x.textAlign = align || 'left'; x.textBaseline = base || 'alphabetic'; x.fillText(s, px, py);
+}
+function hline(x, y, x0, x1, color, dash) {
+  x.strokeStyle = color; x.lineWidth = 1; x.setLineDash(dash || []);
+  x.beginPath(); x.moveTo(x0, y + 0.5); x.lineTo(x1, y + 0.5); x.stroke(); x.setLineDash([]);
+}
+
+/* ---------- 1. wave across sub-carriers ---------- */
+function drawWave() {
+  const { x, w, h } = fit($('#wave'));
+  const T = 12, B = 24, pw = w - PADL - PADR, ph = h - T - B;
+  const live = st.amp, base = st.base || st.avg;
+  if (!live || !base) { text(x, 'Waiting for the first packets…', w / 2, h / 2, C.muted, 'center'); return; }
+  const dev = st.waveMode === 'dev';
+  const vi = []; for (let i = 0; i < NSUB; i++) if (st.valid[i]) vi.push(i);
+  let meanBase = 0; vi.forEach(i => meanBase += base[i]); meanBase = meanBase / Math.max(1, vi.length) || 1;
+  const fs = st.fullScale / st.gain;
+  const val = (a, i) => dev ? (a[i] - base[i]) / meanBase * 100 : a[i];
+  let lo, hi;
+  if (dev) { lo = -fs; hi = fs; }
+  else {
+    let mn = 1e9, mx = -1e9;
+    vi.forEach(i => { mn = Math.min(mn, live[i], base[i]); mx = Math.max(mx, live[i], base[i]); });
+    lo = Math.max(0, mn - (mx - mn) * 0.12); hi = mx + (mx - mn) * 0.12;
+    st.yLo += (lo - st.yLo) * 0.1; st.yHi += (hi - st.yHi) * 0.1; lo = st.yLo; hi = st.yHi;
+  }
+  const Y = v => T + ph - (v - lo) / (hi - lo) * ph;
+
+  // guard-band columns that carry no data
+  x.fillStyle = 'rgba(255,255,255,0.025)';
+  for (let i = 0; i < NSUB; i++) if (!st.valid[i]) x.fillRect(PADL + i * pw / NSUB, T, pw / NSUB, ph);
+  // grid + y labels
+  for (let k = 0; k <= 4; k++) {
+    const v = lo + (hi - lo) * k / 4, y = Y(v);
+    hline(x, Math.round(y), PADL, w - PADR, C.grid);
+    text(x, dev ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : v.toFixed(0), PADL - 6, y + 4, C.muted, 'right');
+  }
+  for (let i = 0; i < NSUB; i += 8) text(x, String(i), colX(i, pw), h - 8, C.muted, 'center');
+  text(x, 'sub-carrier', w - PADR, h - 8, C.muted, 'right');
+
+  // persistence trails
+  const nt = st.trails.length;
+  st.trails.forEach((a, n) => {
+    x.strokeStyle = `rgba(232,240,246,${0.05 + 0.1 * n / nt})`; x.lineWidth = 1; x.beginPath();
+    let pen = false;
+    for (let i = 0; i < NSUB; i++) {
+      if (!st.valid[i]) { pen = false; continue; }
+      const px = colX(i, pw), py = Y(val(a, i));
+      pen ? x.lineTo(px, py) : x.moveTo(px, py); pen = true;
+    }
+    x.stroke();
+  });
+  // area between live and baseline: warm above, cool below
+  for (let i = 0; i < NSUB - 1; i++) {
+    if (!st.valid[i] || !st.valid[i+1]) continue;
+    const a0 = val(live, i), a1 = val(live, i+1), b0 = val(base, i), b1 = val(base, i+1);
+    const up = (a0 - b0) + (a1 - b1) > 0;
+    x.fillStyle = up ? 'rgba(255,61,129,0.45)' : 'rgba(25,195,230,0.45)';
+    x.beginPath(); x.moveTo(colX(i, pw), Y(b0)); x.lineTo(colX(i, pw), Y(a0));
+    x.lineTo(colX(i+1, pw), Y(a1)); x.lineTo(colX(i+1, pw), Y(b1)); x.closePath(); x.fill();
+  }
+  // baseline
+  x.strokeStyle = C.ink2; x.lineWidth = 1; x.setLineDash([4, 4]); x.beginPath();
+  let pen = false;
+  for (let i = 0; i < NSUB; i++) {
+    if (!st.valid[i]) { pen = false; continue; }
+    const px = colX(i, pw), py = Y(val(base, i)); pen ? x.lineTo(px, py) : x.moveTo(px, py); pen = true;
+  }
+  x.stroke(); x.setLineDash([]);
+  // live line
+  x.strokeStyle = C.ink; x.lineWidth = 2; x.lineJoin = 'round'; x.beginPath(); pen = false;
+  for (let i = 0; i < NSUB; i++) {
+    if (!st.valid[i]) { pen = false; continue; }
+    const px = colX(i, pw), py = Y(val(live, i)); pen ? x.lineTo(px, py) : x.moveTo(px, py); pen = true;
+  }
+  x.stroke();
+
+  // legend
+  const lx = PADL + 8, ly = T + 14;
+  x.strokeStyle = C.ink; x.lineWidth = 2; x.beginPath(); x.moveTo(lx, ly - 4); x.lineTo(lx + 18, ly - 4); x.stroke();
+  text(x, 'live', lx + 24, ly, C.ink2);
+  x.strokeStyle = C.ink2; x.lineWidth = 1; x.setLineDash([4, 4]); x.beginPath(); x.moveTo(lx + 64, ly - 4); x.lineTo(lx + 82, ly - 4); x.stroke(); x.setLineDash([]);
+  text(x, st.base ? 'empty-room baseline' : 'recent average (not calibrated)', lx + 88, ly, C.ink2);
+}
+
+/* ---------- 2. waterfall ---------- */
+function drawWaterfall() {
+  const { x, w, h } = fit($('#wf'));
+  const T = 4, B = 6, pw = w - PADL - PADR, ph = h - T - B;
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(wfOff, 0, 0, NSUB, WF_ROWS, PADL, T, pw, ph);
+  [['now', 0], ['5 s', 100], ['10 s', 200], ['15 s', 299]].forEach(([s, r], k) => {
+    const y = T + (r + 0.5) / WF_ROWS * ph;
+    text(x, s, PADL - 6, k === 0 ? y + 10 : k === 3 ? y - 2 : y + 4, C.muted, 'right');
+    if (k > 0 && k < 3) hline(x, Math.round(y), PADL, PADL + 6, C.muted);
+  });
+  // colour key
+  const kx = w - PADR - 150, ky = h - 18;
+  const g = x.createLinearGradient(kx, 0, kx + 100, 0);
+  g.addColorStop(0, `rgb(${CY})`); g.addColorStop(0.5, `rgb(${MID})`); g.addColorStop(1, `rgb(${MG})`);
+  x.fillStyle = 'rgba(10,18,26,0.7)'; x.fillRect(kx - 52, ky - 14, 204, 26);
+  x.fillStyle = g; x.fillRect(kx, ky - 6, 100, 8);
+  text(x, 'weaker', kx - 6, ky + 2, C.ink2, 'right'); text(x, 'stronger', kx + 106, ky + 2, C.ink2, 'left');
+}
+
+/* ---------- 3. small time series ---------- */
+function drawSeries(canvas, data, o) {
+  const { x, w, h } = fit(canvas);
+  const T = 14, B = 20, pw = w - PADL - PADR, ph = h - T - B;
+  const Y = v => T + ph - (v - o.lo) / (o.hi - o.lo) * ph;
+  const X = i => PADL + (i + (TL - data.length)) / (TL - 1) * pw;
+  (o.ticks || []).forEach(t => { hline(x, Math.round(Y(t)), PADL, w - PADR, C.grid); text(x, o.fmt ? o.fmt(t) : String(t), PADL - 6, Y(t) + 4, C.muted, 'right'); });
+  (o.lines || []).forEach(l => {
+    hline(x, Math.round(Y(l.y)), PADL, w - PADR, l.color || C.muted, [4, 4]);
+    text(x, l.label, w - PADR - 4, Y(l.y) - 4, C.ink2, 'right');
+  });
+  [['-30 s', 0], ['-20 s', 1/3], ['-10 s', 2/3], ['now', 1]].forEach(([s, f], k) =>
+    text(x, s, PADL + f * pw, h - 6, C.muted, k === 0 ? 'left' : k === 3 ? 'right' : 'center'));
+  if (data.length < 2) { text(x, o.empty || '', w / 2, h / 2, C.muted, 'center'); return; }
+  x.strokeStyle = o.color; x.lineWidth = 1.75; x.lineJoin = 'round'; x.beginPath();
+  data.forEach((v, i) => { const py = Y(Math.max(o.lo, Math.min(o.hi, v))); i ? x.lineTo(X(i), py) : x.moveTo(X(i), py); });
+  x.stroke();
+}
+function drawMovement() {
+  if (!st.status || !st.status.calibrated) {
+    const { x, w, h } = fit($('#mov')); text(x, 'Calibrate to scale movement', w / 2, h / 2, C.muted, 'center'); return;
+  }
+  const mx = Math.max(6, ...st.lvlHist.slice(-TL)) * 1.1;
+  st.movMax += (Math.min(mx, 20) - st.movMax) * 0.15;
+  drawSeries($('#mov'), st.lvlHist, { lo: 0, hi: st.movMax, color: C.cyan,
+    ticks: [0, Math.round(st.movMax / 2), Math.round(st.movMax)],
+    lines: [{ y: 2, label: 'moving' }, { y: 4, label: 'burst' }] });
+}
+function drawTrace() {
+  const d = st.bpHist.map(r => r[st.best]);
+  const m = Math.max(1, ...d.map(Math.abs)) * 1.15;
+  st.traceMax += (m - st.traceMax) * 0.15;
+  const t = st.traceMax;
+  drawSeries($('#trace'), d, { lo: -t, hi: t, color: C.cyan, ticks: [-t * 0.9, 0, t * 0.9],
+    fmt: v => (v > 0 ? '+' : '') + v.toFixed(1) + '%', empty: 'Collecting…' });
+}
+
+/* ---------- 4. spectrum ---------- */
+function drawSpectrum() {
+  const { x, w, h } = fit($('#spec'));
+  const l = 14, r = 12, T = 26, B = 24, pw = w - l - r, ph = h - T - B;
+  const s = st.status, X = f => l + f * pw, Y = v => T + ph - v * ph;
+  x.fillStyle = 'rgba(25,195,230,0.10)'; x.fillRect(X(0.2), T, X(0.5) - X(0.2), ph);
+  for (let f = 0; f <= 1.001; f += 0.2) { text(x, f > 0.95 ? '1.0 Hz' : f.toFixed(1), X(f), h - 8, C.muted, f < 0.05 ? 'left' : f > 0.95 ? 'right' : 'center'); }
+    [[0.2, 12], [0.3, 18], [0.4, 24], [0.5, 30]].forEach(([f, b]) => text(x, String(b), X(f), T - 8, C.muted, 'center'));
+  text(x, 'breaths/min', X(0.5) + 18, T - 8, C.muted, 'left');
+  hline(x, Math.round(Y(0)), l, w - r, C.grid);
+  if (!s || !s.spec) { text(x, 'Spectrum appears after 10 s of data', w / 2, h / 2 + 4, C.muted, 'center'); return; }
+  const sp = s.spec, n = sp.length;
+  x.beginPath(); x.moveTo(X(0), Y(0));
+  sp.forEach((v, i) => x.lineTo(X(i / (n - 1)), Y(v)));
+  x.lineTo(X(1), Y(0)); x.closePath(); x.fillStyle = 'rgba(25,195,230,0.25)'; x.fill();
+  x.strokeStyle = C.cyan; x.lineWidth = 1.75; x.lineJoin = 'round'; x.beginPath();
+  sp.forEach((v, i) => i ? x.lineTo(X(i / (n - 1)), Y(v)) : x.moveTo(X(0), Y(v))); x.stroke();
+  if (s.bpm != null && s.peak_hz != null) {
+    const px = X(s.peak_hz), idx = Math.round(s.peak_hz * (n - 1)), py = Y(sp[idx] || 1);
+    x.strokeStyle = C.magenta; x.lineWidth = 1.5; x.beginPath(); x.moveTo(px, py); x.lineTo(px, Y(0)); x.stroke();
+    x.fillStyle = C.magenta; x.beginPath(); x.arc(px, py, 4, 0, 7); x.fill();
+    text(x, s.peak_hz.toFixed(2) + ' Hz', px + (px > w * 0.7 ? -8 : 8), py + 4, C.ink, px > w * 0.7 ? 'right' : 'left');
+  }
+}
+
+function drawAll() {
+  drawWave(); drawWaterfall(); drawMovement(); drawTrace(); drawSpectrum();
+}
+
+/* ---------- readouts & banner ---------- */
+function setState(id, cls) { const e = $(id); e.classList.remove('ok', 'warn', 'alert'); if (cls) e.classList.add(cls); }
+function applyStatus(s) {
+  st.status = s;
+  if (s.valid) st.valid = s.valid;
+  if (s.base) st.base = s.base;
+  if (s.E_base != null) st.fullScale = Math.min(8, Math.max(1.5, s.E_base * 8));
+  st.cal = s.cal;
+
+  // presence
+  if (!s.calibrated) {
+    $('#presV').textContent = 'Not calibrated'; $('#presD').textContent = 'Press Calibrate while the room is empty.'; setState('#rPres', 'warn');
+    $('#meter').style.visibility = 'hidden';
+  } else {
+    $('#presV').textContent = s.present ? 'Someone is here' : 'Room is empty'; setState('#rPres', s.present ? 'ok' : '');
+    $('#presD').textContent = `${s.moving ? 'Moving' : 'Still'} · signal energy ${s.E.toFixed(2)}% (threshold ${s.E_thr.toFixed(2)}%)`;
+    const m = $('#meter'); m.style.visibility = 'visible';
+    m.firstElementChild.style.width = Math.min(100, Math.log(1 + s.E / s.E_thr) / Math.log(11) * 100) + '%';
+    m.lastElementChild.style.left = (Math.log(2) / Math.log(11) * 100) + '%';
+  }
+  // breathing
+  if (s.bpm != null) {
+    $('#brV').innerHTML = `${Math.round(s.bpm)}<small>breaths/min</small>`; setState('#rBreath', 'ok');
+    $('#brD').textContent = `Peak at ${s.peak_hz.toFixed(2)} Hz · ${s.snr.toFixed(0)}× the background`;
+  } else {
+    $('#brV').textContent = '—'; setState('#rBreath', '');
+    $('#brD').textContent = !s.window_ready ? 'Collecting the first 10 s of signal'
+      : s.moving ? 'Too much movement to read breathing'
+      : s.calibrated && !s.present ? 'Nobody in the room'
+      : 'No clear peak between 0.2 and 0.5 Hz';
+  }
+  // fall
+  const b = $('#banner');
+  if (s.fall) {
+    $('#fallV').textContent = 'Possible fall'; setState('#rFall', 'alert');
+    $('#fallD').textContent = `${Math.round(s.fall_age)} s ago · movement burst, then stillness`;
+    b.className = 'show fall'; b.innerHTML = `<b>Possible fall.</b> A sharp burst of movement, then no movement, with someone still in the room.`;
+  } else {
+    $('#fallV').textContent = 'No fall'; setState('#rFall', '');
+    $('#fallD').textContent = 'Watching for a movement burst followed by stillness';
+    if (s.cal.state === 'running') {
+      b.className = 'show cal';
+      b.innerHTML = `<b>Calibrating.</b> Leave the room and keep it still — ${Math.ceil(s.cal.seconds_left)} s left.<div class="bar"><span style="width:${s.cal.progress * 100}%"></span></div>`;
+    } else b.className = '';
+  }
+  const cb = $('#calBtn'); cb.disabled = s.cal.state === 'running'; cb.textContent = s.cal.state === 'running' ? 'Calibrating…' : (s.calibrated ? 'Recalibrate' : 'Calibrate empty room');
+  $('#chip').dataset.pps = s.pps; updateChip();
+}
+
+function updateChip() {
+  const chip = $('#chip'), t = $('#chipText'), stale = Date.now() - st.lastFrame > 2000;
+  if (!st.source) { chip.className = 'chip'; t.textContent = 'Connecting…'; return; }
+  if (stale) {
+    chip.className = 'chip stale';
+    t.textContent = st.lastLog || 'No CSI data. Check the receiver is plugged in and the transmitter is powered.';
+  } else {
+    chip.className = 'chip live';
+    t.textContent = `Live · ${st.label} · ${chip.dataset.pps || '…'} packets/s`;
+  }
+}
+
+/* ---------- websocket ---------- */
+let ws, lastDraw = 0;
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => { st.lastLog = ''; };
+  ws.onclose = () => { st.source = null; updateChip(); setTimeout(connect, 1000); };
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'hello') {
+      st.source = m.source; st.label = m.source_label; st.valid = m.valid; if (m.base) st.base = m.base;
+      $('#simSeg').hidden = m.source !== 'sim'; st.cal = m.cal; updateChip();
+    } else if (m.type === 'log') { st.lastLog = m.msg; updateChip(); }
+    else if (m.type === 'frame') onFrame(m);
+  };
+}
+function onFrame(m) {
+  st.lastFrame = Date.now();
+  st.amp = m.amp;
+  if (!st.avg) st.avg = m.amp.slice(); else for (let i = 0; i < NSUB; i++) st.avg[i] += 0.01 * (m.amp[i] - st.avg[i]);
+  st.trails.push(m.amp); if (st.trails.length > 8) st.trails.shift();
+  st.bpHist.push(m.bp); if (st.bpHist.length > TL) st.bpHist.shift();
+  if (m.lvl != null) { st.lvlHist.push(m.lvl); if (st.lvlHist.length > TL) st.lvlHist.shift(); }
+  else st.lvlHist.length = 0;
+  pushWaterfall(m.bp);
+  if (m.n % 20 === 0) pickBest();
+  if (m.status) applyStatus(m.status);
+  st.dirty = true;
+}
+function pickBest() {
+  const n = Math.min(st.bpHist.length, 400); if (n < 40) return;
+  let best = st.best, bv = -1;
+  for (let i = 0; i < NSUB; i++) {
+    if (!st.valid[i]) continue;
+    let s = 0, s2 = 0;
+    for (let k = st.bpHist.length - n; k < st.bpHist.length; k++) { const v = st.bpHist[k][i]; s += v; s2 += v * v; }
+    const vr = s2 / n - (s / n) ** 2; if (vr > bv) { bv = vr; best = i; }
+  }
+  st.best = best; $('#traceNote').textContent = '#' + best;
+}
+
+/* ---------- controls ---------- */
+$('#calBtn').onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ cmd: 'calibrate' }));
+$('#simSeg').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#simSeg').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  ws.send(JSON.stringify({ cmd: 'sim', mode: b.dataset.mode }));
+};
+$('#waveSeg').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#waveSeg').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  st.waveMode = b.dataset.w; st.dirty = true;
+};
+$('#gain').oninput = e => { st.gain = +e.target.value; st.dirty = true; };
+window.addEventListener('resize', () => st.dirty = true);
+
+function loop(t) {
+  if (st.dirty && t - lastDraw > 30) { st.dirty = false; lastDraw = t; drawAll(); }
+  requestAnimationFrame(loop);
+}
+setInterval(updateChip, 500);
+connect(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
